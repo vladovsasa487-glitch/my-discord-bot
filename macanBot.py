@@ -1,21 +1,18 @@
 # Импорты
 import asyncio
+from collections import deque
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
 import re
-from collections import deque
+import shutil
+import threading
 import discord
 from discord.ext import commands
 import yt_dlp
-import shutil
 
-
-def resolve_ffmpeg() -> str:
-    if os.path.isfile(FFMPEG_PATH):
-        return FFMPEG_PATH
-    return shutil.which("ffmpeg") or "ffmpeg"
-
-# Путь к ffmpeg.exe
+# Путь к ffmpeg.exe (используется на Windows, если файл существует; на Linux берётся из PATH)
 FFMPEG_PATH = r"C:\Users\user\AppData\Roaming\JetBrains\PyCharm2026.3\HomeFiles\ffmpeg.exe"
+COOKIES_FILE_PATH = "cookies.txt"
 
 STOP_WORDS_PATTERN = (
     r"(?:"
@@ -27,6 +24,42 @@ STOP_WORDS_PATTERN = (
     r"тихо|тише|замолчи|заткнись|не\s+надо|не\s+включай\s+больше|очисти\s+очередь"
     r")"
 )
+
+
+def resolve_ffmpeg() -> str:
+    if os.path.isfile(FFMPEG_PATH):
+        return FFMPEG_PATH
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+
+def prepare_cookies_file() -> str | None:
+    cookies_env = os.getenv("YTDLP_COOKIES", "").strip()
+    if cookies_env:
+        with open(COOKIES_FILE_PATH, "w", encoding="utf-8") as f:
+            f.write(cookies_env)
+        return COOKIES_FILE_PATH
+    if os.path.isfile(COOKIES_FILE_PATH):
+        return COOKIES_FILE_PATH
+    return None
+
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        return
+
+
+def start_web_server() -> None:
+    port = int(os.getenv("PORT", "10000"))
+    server = ThreadingHTTPServer(("0.0.0.0", port), _HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    print(f"HTTP-сервер запущен на порту {port}")
 
 
 # Вспомогательные функции (поиск трека и стоп-команды)
@@ -68,11 +101,11 @@ intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-YDL_OPTIONS = {
+BASE_YDL_OPTIONS = {
     "format": "bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio/best",
     "noplaylist": True,
     "quiet": True,
-    "no_warnings": False,
+    "no_warnings": True,
 }
 
 FFMPEG_OPTIONS = {
@@ -81,37 +114,60 @@ FFMPEG_OPTIONS = {
 }
 
 
-def resolve_ffmpeg() -> str:
-    if os.path.isfile(FFMPEG_PATH):
-        return FFMPEG_PATH
-    return "ffmpeg"
+def _try_extract(query: str, extra_opts: dict | None = None) -> dict | None:
+    opts = dict(BASE_YDL_OPTIONS)
+    cookiefile = prepare_cookies_file()
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
+    if extra_opts:
+        opts.update(extra_opts)
 
-
-def extract_track_info(query: str) -> dict | None:
-    search_query = (
-        query.strip()
-        if query.strip().startswith(("http://", "https://"))
-        else f"ytsearch1:{query.strip()}"
-    )
-    with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
-        info = ydl.extract_info(search_query, download=False)
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(query, download=False)
 
     if not info:
         return None
 
     if "entries" in info:
-        entries = info.get("entries") or []
+        entries = [e for e in (info.get("entries") or []) if e]
         if not entries:
             return None
         info = entries[0]
 
-    if not info or not info.get("url"):
+    stream_url = info.get("url")
+    if not stream_url:
         return None
 
     return {
         "title": info.get("title") or "Без названия",
-        "url": info["url"],
+        "url": stream_url,
     }
+
+
+def extract_track_info(query: str) -> dict | None:
+    cleaned = query.strip()
+    if not cleaned:
+        return None
+
+    # 1. Пробуем прямой запрос или поиск на YouTube
+    primary_query = cleaned if cleaned.startswith(("http://", "https://")) else f"ytsearch1:{cleaned}"
+    try:
+        track = _try_extract(primary_query)
+        if track:
+            return track
+    except Exception as exc:
+        print(f"YouTube extract ошибка: {exc}")
+
+    # 2. Запасной вариант — поиск через SoundCloud (если YouTube блокирует сервер)
+    if not cleaned.startswith(("http://", "https://")):
+        try:
+            track = _try_extract(f"scsearch1:{cleaned}")
+            if track:
+                return track
+        except Exception as exc:
+            print(f"SoundCloud extract ошибка: {exc}")
+
+    return None
 
 
 players: dict[int, "MusicPlayer"] = {}
@@ -166,6 +222,7 @@ class MusicControlView(discord.ui.View):
                 await vc.disconnect(force=True)
 
         await self.player.delete_panel()
+
 
 # Музыкальный плеер и плавающая панель
 class MusicPlayer:
@@ -274,6 +331,7 @@ class MusicPlayer:
         vc.play(source, after=after_playing)
         await self.refresh_panel()
 
+
 # Реакция на обращение к боту
 def get_player(guild: discord.Guild) -> MusicPlayer:
     player = players.get(guild.id)
@@ -286,6 +344,7 @@ def get_player(guild: discord.Guild) -> MusicPlayer:
 @bot.event
 async def on_ready():
     print(f"Бот запущен как {bot.user} (ID: {bot.user.id})")
+
 
 @bot.event
 async def on_voice_state_update(
@@ -386,4 +445,5 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("Не задан DISCORD_TOKEN")
 
+start_web_server()
 bot.run(TOKEN)
