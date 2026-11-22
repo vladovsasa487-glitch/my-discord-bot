@@ -330,7 +330,7 @@ class MusicPlayer:
             await self.delete_panel()
             return
 
-      self.current = self.queue.popleft()
+        self.current = self.queue.popleft()
         ffmpeg_exe = resolve_ffmpeg()
 
         headers = self.current.get("headers") or DEFAULT_HEADERS
