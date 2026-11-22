@@ -102,10 +102,15 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 BASE_YDL_OPTIONS = {
-    "format": "bestaudio[acodec=opus]/bestaudio[ext=m4a]/bestaudio/best",
+    "format": "bestaudio/best",
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["mweb", "tv_embedded", "web"],
+        }
+    },
 }
 
 FFMPEG_OPTIONS = {
@@ -158,14 +163,15 @@ def extract_track_info(query: str) -> dict | None:
     except Exception as exc:
         print(f"YouTube extract ошибка: {exc}")
 
-    # 2. Запасной вариант — поиск через SoundCloud (если YouTube блокирует сервер)
+    # 2. Запасной вариант — поиск через SoundCloud (берём первые 3, чтобы пропустить DRM-треки)
     if not cleaned.startswith(("http://", "https://")):
-        try:
-            track = _try_extract(f"scsearch1:{cleaned}")
-            if track:
-                return track
-        except Exception as exc:
-            print(f"SoundCloud extract ошибка: {exc}")
+        for idx in (1, 2, 3):
+            try:
+                track = _try_extract(f"scsearch{idx}:{cleaned}")
+                if track:
+                    return track
+            except Exception as exc:
+                print(f"SoundCloud extract ошибка ({idx}): {exc}")
 
     return None
 
