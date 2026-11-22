@@ -149,11 +149,16 @@ def _try_extract(query: str, extra_opts: dict | None = None) -> dict | None:
     if not stream_url:
         return None
 
+    headers = dict(DEFAULT_HEADERS)
+    if isinstance(info.get("http_headers"), dict):
+        headers.update(info["http_headers"])
+
     return {
         "title": info.get("title") or "Без названия",
         "url": stream_url,
+        "headers": headers,
+        "source": info.get("extractor_key") or "unknown",
     }
-
 
 def extract_track_info(query: str) -> dict | None:
     cleaned = query.strip()
@@ -325,12 +330,21 @@ class MusicPlayer:
             await self.delete_panel()
             return
 
-        self.current = self.queue.popleft()
+      self.current = self.queue.popleft()
         ffmpeg_exe = resolve_ffmpeg()
+
+        headers = self.current.get("headers") or DEFAULT_HEADERS
+        header_lines = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+        before_opts = (
+            f'-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
+            f'-headers "{header_lines}"'
+        )
+
         source = discord.FFmpegPCMAudio(
             self.current["url"],
             executable=ffmpeg_exe,
-            **FFMPEG_OPTIONS,
+            before_options=before_opts,
+            options="-vn",
         )
 
         def after_playing(error: Exception | None):
