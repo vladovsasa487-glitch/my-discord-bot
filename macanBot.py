@@ -102,15 +102,10 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 BASE_YDL_OPTIONS = {
-    "format": "bestaudio/best",
+    "format": "best/bestaudio",
     "noplaylist": True,
-    "quiet": True,
-    "no_warnings": True,
-    "extractor_args": {
-        "youtube": {
-            "player_client": ["mweb", "tv_embedded", "web"],
-        }
-    },
+    "quiet": False,
+    "no_warnings": False,
 }
 
 FFMPEG_OPTIONS = {
