@@ -341,12 +341,12 @@ before_opts = (
     f'-user_agent "{safe_ua}"'
 )
 
-        source = discord.FFmpegPCMAudio(
-            self.current["url"],
-            executable=ffmpeg_exe,
-            before_options=before_opts,
-            options="-vn",
-        )
+source = discord.FFmpegPCMAudio(
+    self.current["url"],
+    executable=ffmpeg_exe,
+    before_options=before_opts,
+    options="-vn",
+)
 
         def after_playing(error: Exception | None):
             fut = asyncio.run_coroutine_threadsafe(self.play_next(), bot.loop)
