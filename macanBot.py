@@ -334,12 +334,12 @@ class MusicPlayer:
         ffmpeg_exe = resolve_ffmpeg()
 
 headers = self.current.get("headers") or DEFAULT_HEADERS
-        user_agent = headers.get("User-Agent") or DEFAULT_HEADERS["User-Agent"]
-        safe_ua = user_agent.replace("\r", "").replace("\n", "").replace('"', "")
-        before_opts = (
-            f'-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
-            f'-user_agent "{safe_ua}"'
-        )
+user_agent = headers.get("User-Agent") or DEFAULT_HEADERS["User-Agent"]
+safe_ua = user_agent.replace("\r", "").replace("\n", "").replace('"', "")
+before_opts = (
+    f'-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
+    f'-user_agent "{safe_ua}"'
+)
 
         source = discord.FFmpegPCMAudio(
             self.current["url"],
