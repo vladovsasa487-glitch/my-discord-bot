@@ -333,20 +333,20 @@ class MusicPlayer:
         self.current = self.queue.popleft()
         ffmpeg_exe = resolve_ffmpeg()
 
-headers = self.current.get("headers") or DEFAULT_HEADERS
-user_agent = headers.get("User-Agent") or DEFAULT_HEADERS["User-Agent"]
-safe_ua = user_agent.replace("\r", "").replace("\n", "").replace('"', "")
-before_opts = (
-    f'-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
-    f'-user_agent "{safe_ua}"'
-)
+        headers = self.current.get("headers") or DEFAULT_HEADERS
+        user_agent = headers.get("User-Agent") or DEFAULT_HEADERS["User-Agent"]
+        safe_ua = user_agent.replace("\r", "").replace("\n", "").replace('"', "")
+        before_opts = (
+            f'-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
+            f'-user_agent "{safe_ua}"'
+        )
 
-source = discord.FFmpegPCMAudio(
-    self.current["url"],
-    executable=ffmpeg_exe,
-    before_options=before_opts,
-    options="-vn",
-)
+        source = discord.FFmpegPCMAudio(
+            self.current["url"],
+            executable=ffmpeg_exe,
+            before_options=before_opts,
+            options="-vn",
+        )
 
         def after_playing(error: Exception | None):
             fut = asyncio.run_coroutine_threadsafe(self.play_next(), bot.loop)
