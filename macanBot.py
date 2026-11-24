@@ -333,7 +333,7 @@ class MusicPlayer:
         self.current = self.queue.popleft()
         ffmpeg_exe = resolve_ffmpeg()
 
-      headers = self.current.get("headers") or DEFAULT_HEADERS
+headers = self.current.get("headers") or DEFAULT_HEADERS
         user_agent = headers.get("User-Agent") or DEFAULT_HEADERS["User-Agent"]
         safe_ua = user_agent.replace("\r", "").replace("\n", "").replace('"', "")
         before_opts = (
